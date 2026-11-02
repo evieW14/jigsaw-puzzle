@@ -1,15 +1,19 @@
-from fastapi import FastAPI
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import get_settings
+from app.models.puzzle import Puzzle
+from app.services.slicer import slice_image
 
 import logging
 import time
 
 settings = get_settings()
 app = FastAPI()
+
+settings.pieces_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/pieces", StaticFiles(directory=settings.pieces_dir), name="pieces")
 
 
 # ---------------------------------------------------------
@@ -49,3 +53,17 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/puzzle", response_model=Puzzle)
+def get_puzzle(
+        rows: int = Query(gt=0, le=settings.max_grid_size),
+        columns: int = Query(gt=0, le=settings.max_grid_size),
+):
+    out_dir = settings.pieces_dir / f"{rows}x{columns}"
+    return slice_image(
+        image_path=settings.image_path,
+        rows=rows,
+        columns=columns,
+        out_dir=out_dir,
+        url_prefix=f"/pieces/{rows}x{columns}",
+    )
